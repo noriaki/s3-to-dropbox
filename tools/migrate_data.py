@@ -143,16 +143,18 @@ def migrate_bucket(bucket_name: str, aws_client: AWSClient, dropbox_client: Drop
         os.makedirs(bucket_temp_dir, exist_ok=True)
 
         downloaded_files = 0
+        with tqdm(total=size, unit='B', unit_scale=True, desc="  ダウンロード") as pbar:
+            def download_progress(key, file_size):
+                nonlocal downloaded_files
+                downloaded_files += 1
+                pbar.update(file_size)
+                pbar.set_postfix({'ファイル': f'{downloaded_files}/{count}'}, refresh=False)
 
-        def download_progress(key, file_size):
-            nonlocal downloaded_files
-            downloaded_files += 1
-
-        success = aws_client.download_bucket(
-            bucket_name,
-            bucket_temp_dir,
-            progress_callback=download_progress
-        )
+            success = aws_client.download_bucket(
+                bucket_name,
+                bucket_temp_dir,
+                progress_callback=download_progress
+            )
 
         if not success:
             raise Exception("S3からのダウンロードに失敗しました")
