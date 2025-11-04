@@ -215,6 +215,11 @@ AWS認証情報が正しく設定されていません。以下の方法で設�
             os.makedirs(download_path, exist_ok=True)
 
             for obj in bucket.objects.all():
+                # S3のディレクトリマーカー（キーが / で終わるオブジェクト）はスキップ
+                if obj.key.endswith('/'):
+                    self.logger.debug(f"ディレクトリマーカーをスキップ: {obj.key}")
+                    continue
+
                 target_path = os.path.join(download_path, obj.key)
 
                 # ディレクトリの作成
