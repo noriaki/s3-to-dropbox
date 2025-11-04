@@ -101,6 +101,13 @@ class ProgressManager:
         }
 
         self.progress_data["completed_buckets"].append(completed_info)
+
+        # Remove from failed_buckets if this is a retry that succeeded
+        self.progress_data["failed_buckets"] = [
+            b for b in self.progress_data["failed_buckets"]
+            if b["bucket_name"] != bucket_name
+        ]
+
         self.progress_data["current_bucket"] = None
         self._save_progress()
 
