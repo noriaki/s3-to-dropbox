@@ -80,20 +80,44 @@ AWS S3バケットをDropboxにバックアップし、安全に削除するた�
 
 ### 1. 依存関係のインストール
 
-#### Python仮想環境の作成（推奨）
+#### Python仮想環境の作成
 
 ```bash
+# 仮想環境を作成
 python3 -m venv venv
-source venv/bin/activate  # macOS/Linux
-# または
-venv\Scripts\activate  # Windows
 ```
 
 #### 依存パッケージのインストール
 
+**⚠️ 重要**: macOS（特にZSH使用時）では、`source venv/bin/activate`が構文エラーになる場合があります。
+その場合は以下の方法で**activateせずに**直接インストールしてください：
+
 ```bash
+# activateせずに、venv/bin/pip を直接使用（推奨）
+venv/bin/pip install -r requirements.txt
+```
+
+<details>
+<summary>💡 従来の方法（activate を使用）でインストールしたい場合</summary>
+
+```bash
+# macOS/Linux (Bash)
+source venv/bin/activate
+pip install -r requirements.txt
+
+# Windows
+venv\Scripts\activate
 pip install -r requirements.txt
 ```
+
+**注意**: ZSHでは`source venv/bin/activate`が以下のエラーで失敗することがあります：
+```
+venv/bin/activate:4: defining function based on alias `deactivate'
+```
+
+この場合は上記の「activateせずに直接インストール」する方法を使用してください。
+
+</details>
 
 ---
 
@@ -332,6 +356,31 @@ SPLIT_SIZE=10737418240  # 10GB
 
 ## 使用方法
 
+**⚠️ 仮想環境を使用している場合の注意**
+
+ツールを実行する際は、以下のいずれかの方法を使用してください：
+
+**方法1: venv/bin/python を直接使用（推奨）**
+```bash
+# activateせずに実行
+venv/bin/python tools/bucket_info.py
+venv/bin/python tools/migrate_data.py
+venv/bin/python tools/delete_buckets.py
+```
+
+**方法2: 仮想環境をactivateして実行**
+```bash
+# 仮想環境をactivate（ZSHでエラーになる場合は方法1を使用）
+source venv/bin/activate
+python tools/bucket_info.py
+# 終了時
+deactivate
+```
+
+以下の例では簡潔にするため `python` と記載していますが、仮想環境を使用している場合は適宜 `venv/bin/python` に読み替えてください。
+
+---
+
 ### ツール1: バケット情報確認
 
 全S3バケットの情報を収集・表示します。
@@ -340,6 +389,8 @@ SPLIT_SIZE=10737418240  # 10GB
 
 ```bash
 python tools/bucket_info.py
+# または
+venv/bin/python tools/bucket_info.py
 ```
 
 #### オプション
@@ -391,6 +442,8 @@ S3バケットをDropboxに移行します。
 
 ```bash
 python tools/migrate_data.py
+# または
+venv/bin/python tools/migrate_data.py
 ```
 
 #### オプション
@@ -441,6 +494,8 @@ python tools/migrate_data.py
 
 ```bash
 python tools/delete_buckets.py
+# または
+venv/bin/python tools/delete_buckets.py
 ```
 
 実際には削除せず、削除予定のバケット情報のみを表示します。
@@ -449,6 +504,8 @@ python tools/delete_buckets.py
 
 ```bash
 python tools/delete_buckets.py --delete
+# または
+venv/bin/python tools/delete_buckets.py --delete
 ```
 
 二重確認プロセスが実行されます:
@@ -473,10 +530,12 @@ python tools/delete_buckets.py --delete --profile myprofile
 
 推奨される実行順序:
 
+**注意**: 以下の例では簡潔にするため `python` と記載していますが、仮想環境を使用している場合は `venv/bin/python` を使用してください。
+
 ```
 1️⃣  バケット情報確認
     ↓
-    python tools/bucket_info.py
+    venv/bin/python tools/bucket_info.py
     ↓
     ・全バケットの情報を確認
     ・Dropbox容量が十分か確認
@@ -484,7 +543,7 @@ python tools/delete_buckets.py --delete --profile myprofile
 
 2️⃣  データ移行
     ↓
-    python tools/migrate_data.py
+    venv/bin/python tools/migrate_data.py
     ↓
     ・S3 → Dropboxへバックアップ
     ・途中で中断しても再開可能
@@ -500,13 +559,13 @@ python tools/delete_buckets.py --delete --profile myprofile
 
 4️⃣  削除予定確認（ドライラン）
     ↓
-    python tools/delete_buckets.py
+    venv/bin/python tools/delete_buckets.py
     ↓
     ・削除予定のバケットを確認
 
 5️⃣  バケット削除
     ↓
-    python tools/delete_buckets.py --delete
+    venv/bin/python tools/delete_buckets.py --delete
     ↓
     ・確認プロンプトに従って削除実行
 ```
@@ -547,6 +606,58 @@ python tools/delete_buckets.py --delete --profile myprofile
 ---
 
 ## トラブルシューティング
+
+### 仮想環境のactivateエラー（ZSH）
+
+**エラー**: `venv/bin/activate:4: defining function based on alias 'deactivate'`
+
+**原因**: ZSHで Bash用のactivateスクリプトを実行しようとしている
+
+**解決方法**:
+
+**方法1: activateせずに直接実行（推奨）**
+```bash
+# venv/bin/pip を直接使用
+venv/bin/pip install -r requirements.txt
+
+# ツール実行時も venv/bin/python を使用
+venv/bin/python tools/bucket_info.py
+```
+
+**方法2: Bashシェルで実行**
+```bash
+# Bashに切り替え
+bash
+
+# activateして作業
+source venv/bin/activate
+pip install -r requirements.txt
+python tools/bucket_info.py
+
+# 終了時
+deactivate
+exit  # ZSHに戻る
+```
+
+### Python externally-managed-environment エラー
+
+**エラー**: `error: externally-managed-environment`
+
+**原因**: Homebrew管理のPython 3.14では、PEP 668により直接インストールが制限されています
+
+**解決方法**:
+
+仮想環境を使用してください（activateは不要）：
+```bash
+# 仮想環境を作成
+python3 -m venv venv
+
+# activateせずにインストール
+venv/bin/pip install -r requirements.txt
+
+# ツールを実行
+venv/bin/python tools/bucket_info.py
+```
 
 ### AWS認証エラー
 
