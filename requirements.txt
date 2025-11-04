@@ -1,0 +1,20 @@
+# AWS SDK for S3 operations
+boto3>=1.28.0
+
+# Dropbox API client
+dropbox>=11.36.0
+
+# Progress bar display
+tqdm>=4.65.0
+
+# Environment variable management
+python-dotenv>=1.0.0
+
+# Colorful console output
+colorama>=0.4.6
+
+# Human-readable file sizes
+humanize>=4.6.0
+
+# JSON handling
+python-json-logger>=2.0.7
