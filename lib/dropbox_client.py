@@ -16,23 +16,30 @@ class DropboxClient:
     # チャンクサイズ: 150MB（Dropbox APIの推奨値）
     CHUNK_SIZE = 150 * 1024 * 1024
 
-    def __init__(self, access_token: str, logger: Optional[logging.Logger] = None):
+    def __init__(self, app_key: str, app_secret: str, oauth2_refresh_token: str,
+                 logger: Optional[logging.Logger] = None):
         """
         Dropboxクライアントの初期化
 
         Args:
-            access_token: Dropboxアクセストークン
+            app_key: Dropbox App Key
+            app_secret: Dropbox App Secret
+            oauth2_refresh_token: Dropbox OAuth2 Refresh Token
             logger: ロガー（オプション）
         """
         self.logger = logger or logging.getLogger(__name__)
 
-        if not access_token:
-            self.logger.error("Dropboxアクセストークンが指定されていません")
+        if not app_key or not app_secret or not oauth2_refresh_token:
+            self.logger.error("Dropbox認証情報が不足しています")
             self._print_setup_instructions()
-            raise ValueError("Dropboxアクセストークンが必要です")
+            raise ValueError("Dropbox App Key, App Secret, Refresh Tokenが必要です")
 
         try:
-            self.dbx = dropbox.Dropbox(access_token)
+            self.dbx = dropbox.Dropbox(
+                oauth2_refresh_token=oauth2_refresh_token,
+                app_key=app_key,
+                app_secret=app_secret
+            )
 
             # 認証確認
             self._verify_credentials()
@@ -72,86 +79,84 @@ class DropboxClient:
         """Dropbox認証設定の手順を表示"""
         instructions = """
 ╔════════════════════════════════════════════════════════════════════════╗
-║                 Dropbox APIトークンの取得・設定方法                       ║
+║           Dropbox OAuth2 Refresh Tokenの取得・設定方法                   ║
 ╚════════════════════════════════════════════════════════════════════════╝
 
-Dropboxアクセストークンが正しく設定されていません。
-以下の手順でトークンを取得してください。
+Dropbox認証情報が正しく設定されていません。
+長時間実行するバッチ処理では、リフレッシュトークンが必要です。
 
 【ステップ1: Dropbox App Consoleにアクセス】
 
   1. ブラウザで以下のURLにアクセス:
      https://www.dropbox.com/developers/apps
 
-  2. Dropboxアカウントでログイン
+  2. 既存のアプリを選択（または新規作成）
 
-【ステップ2: アプリケーションを作成】
-
-  1. 「Create app」ボタンをクリック
-
-  2. 以下の設定を選択:
-     - API: Scoped access
-     - Type of access: Full Dropbox
-     - Name: 任意の名前（例: S3-to-Dropbox-Backup）
-
-  3. 「Create app」をクリック
-
-【ステップ3: 権限（Permissions）を設定】
+【ステップ2: 権限（Permissions）を確認】
 
   1. 「Permissions」タブを開く
 
-  2. 以下の権限にチェックを入れる:
+  2. 以下の権限にチェックが入っているか確認:
      ✓ files.metadata.write
      ✓ files.content.write
      ✓ files.content.read
      ✓ account_info.read
 
-  3. 「Submit」ボタンをクリック
+  3. 変更した場合は「Submit」ボタンをクリック
 
-【ステップ4: アクセストークンを生成】
+【ステップ3: App KeyとApp Secretを確認】
 
-  1. 「Settings」タブに戻る
+  1. 「Settings」タブを開く
 
-  2. 「OAuth 2」セクションを見つける
+  2. App keyをコピー
 
-  3. 「Generated access token」の下にある
-     「Generate」ボタンをクリック
+  3. App secretの「Show」ボタンをクリックしてコピー
 
-  4. 表示されたトークンをコピー
-     （このトークンは一度しか表示されません！）
+【ステップ4: 認証コードを取得】
 
-【ステップ5: トークンを設定】
+  1. 以下のURLにアクセス（YOUR_APP_KEYを実際のApp Keyに置き換え）:
 
-  方法1: 環境変数を使用
-    $ export DROPBOX_ACCESS_TOKEN="your_token_here"
+     https://www.dropbox.com/oauth2/authorize?client_id=YOUR_APP_KEY&token_access_type=offline&response_type=code
 
-  方法2: .envファイルを使用
-    プロジェクトルートに .env ファイルを作成し、以下を記載:
+  2. アクセスを許可
 
-    DROPBOX_ACCESS_TOKEN=your_token_here
+  3. リダイレクトされたURLから認証コード（code=以降の文字列）をコピー
 
-【トークンの確認方法】
+【ステップ5: リフレッシュトークンを取得】
 
-  $ echo $DROPBOX_ACCESS_TOKEN
+  以下のcurlコマンドを実行（各値を実際の値に置き換え）:
+
+  curl https://api.dropbox.com/oauth2/token \\
+    -d code=YOUR_AUTHORIZATION_CODE \\
+    -d grant_type=authorization_code \\
+    -d client_id=YOUR_APP_KEY \\
+    -d client_secret=YOUR_APP_SECRET
+
+  レスポンスのJSONから "refresh_token" の値をコピー
+
+【ステップ6: 環境変数を設定】
+
+  .envファイルに以下を記載:
+
+  DROPBOX_APP_KEY=your_app_key_here
+  DROPBOX_APP_SECRET=your_app_secret_here
+  DROPBOX_REFRESH_TOKEN=your_refresh_token_here
 
 【セキュリティに関する注意】
 
-  ⚠️  アクセストークンは秘密情報です！
+  ⚠️  認証情報は秘密情報です！
   - Gitにコミットしない（.gitignoreに.envが含まれていることを確認）
   - 他人と共有しない
-  - 定期的に再生成することを推奨
+  - リフレッシュトークンは有効期限がありません
 
 【トラブルシューティング】
 
-  Q: トークンが無効と表示される
-  A: トークンが正しくコピーされているか確認してください。
-     前後にスペースが入っていないか注意してください。
+  Q: 認証エラーが発生する
+  A: App Key, App Secret, Refresh Tokenが正しく設定されているか確認してください。
 
   Q: 権限エラーが発生する
-  A: Permissions タブで必要な権限が全て有効になっているか確認してください。
-
-  Q: トークンを忘れた・紛失した
-  A: 新しいトークンを生成してください。古いトークンは無効化されます。
+  A: Permissionsタブで必要な権限が全て有効になっているか確認してください。
+     権限を変更した場合は、リフレッシュトークンを再取得してください。
 
 詳細は README.md を参照してください。
 """

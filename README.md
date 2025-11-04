@@ -234,7 +234,9 @@ venv/bin/python tools/bucket_info.py --profile myprofile
 
 ---
 
-### 3. Dropbox APIトークンの取得・設定
+### 3. Dropbox OAuth2 Refresh Tokenの取得・設定
+
+**⚠️ 重要**: 長時間実行するデータ移行では、短期トークン（4時間有効）ではなく、**リフレッシュトークン**を使用する必要があります。
 
 #### ステップ1: Dropbox App Consoleにアクセス
 
@@ -245,7 +247,9 @@ venv/bin/python tools/bucket_info.py --profile myprofile
 
 2. Dropboxアカウントでログイン
 
-#### ステップ2: アプリケーションを作成
+3. 既存のアプリを選択（または新規作成）
+
+#### ステップ2: アプリケーションを作成（新規の場合のみ）
 
 1. **「Create app」** ボタンをクリック
 
@@ -270,59 +274,97 @@ venv/bin/python tools/bucket_info.py --profile myprofile
 
 3. **「Submit」** ボタンをクリック
 
-#### ステップ4: アクセストークンを生成
+#### ステップ4: App KeyとApp Secretを確認
 
-1. **「Settings」** タブに戻る
+1. **「Settings」** タブを開く
 
-2. **「OAuth 2」** セクションを見つける
+2. **App key** をコピーして安全な場所に保存
 
-3. **「Access token expiration」** で `No expiration` を選択（推奨）
+3. **App secret** の **「Show」** ボタンをクリックしてコピー
 
-4. **「Generated access token」** の下にある **「Generate」** ボタンをクリック
+#### ステップ5: 認証コードを取得
 
-5. 表示されたトークンをコピー
-   > ⚠️ **重要**: このトークンは一度しか表示されません！必ず安全な場所に保存してください。
+1. 以下のURLにブラウザでアクセス（`YOUR_APP_KEY`を実際のApp Keyに置き換え）:
 
-#### ステップ5: トークンを設定
+   ```
+   https://www.dropbox.com/oauth2/authorize?client_id=YOUR_APP_KEY&token_access_type=offline&response_type=code
+   ```
 
-##### 方法1: .envファイルに設定（推奨）
+   > 💡 **重要**: `token_access_type=offline` パラメータを必ず含めてください
 
-```bash
-# .envファイルを編集
-DROPBOX_ACCESS_TOKEN=your_dropbox_access_token_here
-```
+2. Dropboxアカウントでログインし、アクセスを許可
 
-##### 方法2: 環境変数に設定
+3. リダイレクトされたURL（`https://localhost/?code=XXXXX...`）から **認証コード**（`code=` 以降の文字列）をコピー
 
-```bash
-export DROPBOX_ACCESS_TOKEN="your_dropbox_access_token_here"
-```
+#### ステップ6: リフレッシュトークンを取得
 
-#### ステップ6: 接続テスト
+以下のcurlコマンドを実行（各値を実際の値に置き換え）:
 
 ```bash
-# バケット情報ツールを実行して認証をテスト
-venv/bin/python tools/bucket_info.py
+curl https://api.dropbox.com/oauth2/token \
+  -d code=YOUR_AUTHORIZATION_CODE \
+  -d grant_type=authorization_code \
+  -d client_id=YOUR_APP_KEY \
+  -d client_secret=YOUR_APP_SECRET
 ```
 
-成功すると、Dropbox認証成功のメッセージが表示されます（migrate_data.pyを実行した場合）。
+**レスポンス例**:
+```json
+{
+  "access_token": "sl.xxxxxxxxxx",
+  "token_type": "bearer",
+  "expires_in": 14400,
+  "refresh_token": "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX",
+  "scope": "...",
+  "uid": "...",
+  "account_id": "..."
+}
+```
+
+レスポンスから **`refresh_token`** の値をコピーして保存してください。
+
+#### ステップ7: 環境変数を設定
+
+`.env` ファイルに以下を設定:
+
+```bash
+DROPBOX_APP_KEY=your_app_key_here
+DROPBOX_APP_SECRET=your_app_secret_here
+DROPBOX_REFRESH_TOKEN=your_refresh_token_here
+```
+
+#### ステップ8: 接続テスト
+
+```bash
+# データ移行ツールを実行して認証をテスト
+venv/bin/python tools/migrate_data.py --reset
+```
+
+成功すると、Dropbox認証成功のメッセージが表示されます。
 
 #### トラブルシューティング
 
-**Q: トークンが無効と表示される**
+**Q: 認証エラーが発生する**
 
-- トークンが正しくコピーされているか確認
-- 前後にスペースが入っていないか確認
-- トークンの有効期限が切れていないか確認
+- App Key, App Secret, Refresh Tokenが正しく設定されているか確認
+- `.env`ファイルの値に前後のスペースがないか確認
+- 認証コードは1回しか使用できません。エラーの場合は新しい認証コードを取得
 
 **Q: 権限エラーが発生する**
 
 - Permissions タブで必要な権限が全て有効になっているか確認
-- 権限を変更した後、新しいトークンを生成
+- **権限を変更した場合は、新しいリフレッシュトークンを取得する必要があります**
 
-**Q: トークンを忘れた・紛失した**
+**Q: "expired_access_token" エラーが発生する**
 
-- 新しいトークンを生成してください（古いトークンは無効化されます）
+- リフレッシュトークンではなく、短期トークンを使用している可能性があります
+- 認証URL に `token_access_type=offline` パラメータが含まれているか確認
+- 正しいリフレッシュトークンを取得し直してください
+
+**Q: リフレッシュトークンの有効期限は？**
+
+- リフレッシュトークンは**有効期限がありません**
+- ユーザーがアプリのアクセス許可を取り消すまで永続的に使用できます
 
 ---
 
@@ -338,7 +380,9 @@ cp .env.example .env
 
 ```bash
 # Dropbox設定
-DROPBOX_ACCESS_TOKEN=your_token_here
+DROPBOX_APP_KEY=your_app_key_here
+DROPBOX_APP_SECRET=your_app_secret_here
+DROPBOX_REFRESH_TOKEN=your_refresh_token_here
 DROPBOX_BACKUP_PATH=/S3_Backup
 
 # 一時ファイル保存先
@@ -677,18 +721,25 @@ aws sts get-caller-identity
 
 ### Dropbox認証エラー
 
-**エラー**: `AuthError`
+**エラー**: `AuthError` または `expired_access_token`
 
 **解決方法**:
 
-1. トークンが正しく設定されているか確認:
+1. リフレッシュトークンが正しく設定されているか確認:
    ```bash
-   echo $DROPBOX_ACCESS_TOKEN
+   echo $DROPBOX_APP_KEY
+   echo $DROPBOX_APP_SECRET
+   echo $DROPBOX_REFRESH_TOKEN
    ```
 
-2. トークンの前後にスペースがないか確認
+2. `.env`ファイルの値に前後のスペースがないか確認
 
 3. 権限が正しく設定されているか確認（Dropbox App Consoleで確認）
+   - 権限を変更した場合は、新しいリフレッシュトークンを取得する必要があります
+
+4. `expired_access_token`エラーの場合:
+   - 短期トークンではなく、リフレッシュトークンを使用しているか確認
+   - [Dropbox OAuth2 Refresh Tokenの取得](#3-dropbox-oauth2-refresh-tokenの取得設定)を参照して、正しくリフレッシュトークンを取得してください
 
 ### ディスク容量不足
 
