@@ -341,7 +341,9 @@ def main():
         print("=" * 80)
 
         # 設定読み込み
-        dropbox_token = os.getenv('DROPBOX_ACCESS_TOKEN')
+        dropbox_app_key = os.getenv('DROPBOX_APP_KEY')
+        dropbox_app_secret = os.getenv('DROPBOX_APP_SECRET')
+        dropbox_refresh_token = os.getenv('DROPBOX_REFRESH_TOKEN')
         dropbox_base_path = os.getenv('DROPBOX_BACKUP_PATH', '/S3_Backup')
         temp_dir = os.getenv('TEMP_DIR', './temp')
         compression_format = os.getenv('COMPRESSION_FORMAT', 'zip')
@@ -368,7 +370,12 @@ def main():
 
         # Dropboxクライアントの初期化
         logger.info("Dropboxクライアントを初期化しています...")
-        dropbox_client = DropboxClient(access_token=dropbox_token, logger=logger)
+        dropbox_client = DropboxClient(
+            app_key=dropbox_app_key,
+            app_secret=dropbox_app_secret,
+            oauth2_refresh_token=dropbox_refresh_token,
+            logger=logger
+        )
 
         # その他のクライアントを初期化
         compressor = Compressor(logger=logger)
