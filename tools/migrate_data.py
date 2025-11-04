@@ -140,6 +140,24 @@ def migrate_bucket(bucket_name: str, aws_client: AWSClient, dropbox_client: Drop
 
         # ステップ2: S3からダウンロード
         print(f"\n⬇️  S3からダウンロード中...")
+
+        # 再試行の場合、既存のディレクトリをクリーンアップ
+        if os.path.exists(bucket_temp_dir):
+            logger.warning(f"既存の一時ディレクトリを検出、クリーンアップします: {bucket_temp_dir}")
+            try:
+                shutil.rmtree(bucket_temp_dir)
+                logger.info(f"既存ディレクトリの削除成功")
+            except Exception as cleanup_error:
+                logger.error(f"通常の削除に失敗: {str(cleanup_error)}")
+                # 強制削除を試みる
+                try:
+                    import subprocess
+                    subprocess.run(['rm', '-rf', bucket_temp_dir], check=True)
+                    logger.info(f"強制削除成功")
+                except Exception as force_error:
+                    logger.critical(f"強制削除も失敗しました: {str(force_error)}")
+                    raise Exception(f"再試行前のクリーンアップに失敗しました: {str(force_error)}")
+
         os.makedirs(bucket_temp_dir, exist_ok=True)
 
         downloaded_files = 0
@@ -297,8 +315,16 @@ def migrate_bucket(bucket_name: str, aws_client: AWSClient, dropbox_client: Drop
         try:
             if os.path.exists(bucket_temp_dir):
                 shutil.rmtree(bucket_temp_dir)
-        except:
-            pass
+                logger.info(f"エラー時の一時ファイル削除成功: {bucket_temp_dir}")
+        except Exception as cleanup_error:
+            logger.error(f"エラー時の一時ファイル削除に失敗: {str(cleanup_error)}")
+            # 再試行時の問題を防ぐため、強制的にクリーンアップを試みる
+            try:
+                import subprocess
+                subprocess.run(['rm', '-rf', bucket_temp_dir], check=True)
+                logger.info(f"強制削除成功: {bucket_temp_dir}")
+            except Exception as force_error:
+                logger.critical(f"強制削除も失敗しました: {bucket_temp_dir} - {str(force_error)}")
 
     return result
 

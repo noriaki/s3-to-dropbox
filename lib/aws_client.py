@@ -222,8 +222,19 @@ AWS認証情報が正しく設定されていません。以下の方法で設�
 
                 target_path = os.path.join(download_path, obj.key)
 
-                # ディレクトリの作成
-                os.makedirs(os.path.dirname(target_path), exist_ok=True)
+                # ディレクトリの作成（ファイル/ディレクトリ名の衝突を検出・解決）
+                dir_path = os.path.dirname(target_path)
+                if dir_path:  # 空文字列でないことを確認
+                    # ディレクトリパスがファイルとして存在する場合の処理
+                    if os.path.exists(dir_path) and os.path.isfile(dir_path):
+                        # ファイル名を変更してバックアップ
+                        backup_path = dir_path + ".file"
+                        os.rename(dir_path, backup_path)
+                        self.logger.warning(
+                            f"名前衝突を検出: {obj.key} の処理中、{dir_path} を {backup_path} にリネーム"
+                        )
+
+                    os.makedirs(dir_path, exist_ok=True)
 
                 # ファイルのダウンロード
                 self.s3_client.download_file(bucket_name, obj.key, target_path)
