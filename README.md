@@ -229,7 +229,7 @@ cat ~/.aws/credentials
 aws configure --profile myprofile
 
 # ツール実行時にプロファイルを指定
-python tools/bucket_info.py --profile myprofile
+venv/bin/python tools/bucket_info.py --profile myprofile
 ```
 
 ---
@@ -302,7 +302,7 @@ export DROPBOX_ACCESS_TOKEN="your_dropbox_access_token_here"
 
 ```bash
 # バケット情報ツールを実行して認証をテスト
-python tools/bucket_info.py
+venv/bin/python tools/bucket_info.py
 ```
 
 成功すると、Dropbox認証成功のメッセージが表示されます（migrate_data.pyを実行した場合）。
@@ -388,22 +388,22 @@ deactivate
 #### 基本的な使用方法
 
 ```bash
-python tools/bucket_info.py
-# または
 venv/bin/python tools/bucket_info.py
+# または（activate済みの場合）
+python tools/bucket_info.py
 ```
 
 #### オプション
 
 ```bash
 # 特定のAWSプロファイルを使用
-python tools/bucket_info.py --profile myprofile
+venv/bin/python tools/bucket_info.py --profile myprofile
 
 # 詳細ログを出力
-python tools/bucket_info.py --log-level DEBUG
+venv/bin/python tools/bucket_info.py --log-level DEBUG
 
 # 出力ファイルを指定
-python tools/bucket_info.py --output my_buckets.json
+venv/bin/python tools/bucket_info.py --output my_buckets.json
 ```
 
 #### 出力例
@@ -441,22 +441,22 @@ S3バケットをDropboxに移行します。
 #### 基本的な使用方法
 
 ```bash
-python tools/migrate_data.py
-# または
 venv/bin/python tools/migrate_data.py
+# または（activate済みの場合）
+python tools/migrate_data.py
 ```
 
 #### オプション
 
 ```bash
 # 特定のバケットのみ移行
-python tools/migrate_data.py --buckets bucket1 bucket2
+venv/bin/python tools/migrate_data.py --buckets bucket1 bucket2
 
 # 特定のAWSプロファイルを使用
-python tools/migrate_data.py --profile myprofile
+venv/bin/python tools/migrate_data.py --profile myprofile
 
 # 進行状況をリセット
-python tools/migrate_data.py --reset
+venv/bin/python tools/migrate_data.py --reset
 ```
 
 #### 処理フロー
@@ -481,7 +481,7 @@ python tools/migrate_data.py --reset
 # 処理中に Ctrl+C で中断
 
 # 再実行すると、完了済みのバケットはスキップされます
-python tools/migrate_data.py
+venv/bin/python tools/migrate_data.py
 ```
 
 ---
@@ -493,9 +493,9 @@ python tools/migrate_data.py
 #### ドライラン（削除予定の確認）
 
 ```bash
-python tools/delete_buckets.py
-# または
 venv/bin/python tools/delete_buckets.py
+# または（activate済みの場合）
+python tools/delete_buckets.py
 ```
 
 実際には削除せず、削除予定のバケット情報のみを表示します。
@@ -503,9 +503,9 @@ venv/bin/python tools/delete_buckets.py
 #### 実際に削除
 
 ```bash
-python tools/delete_buckets.py --delete
-# または
 venv/bin/python tools/delete_buckets.py --delete
+# または（activate済みの場合）
+python tools/delete_buckets.py --delete
 ```
 
 二重確認プロセスが実行されます:
@@ -518,10 +518,10 @@ venv/bin/python tools/delete_buckets.py --delete
 
 ```bash
 # 特定のバケットのみ削除
-python tools/delete_buckets.py --delete --buckets bucket1 bucket2
+venv/bin/python tools/delete_buckets.py --delete --buckets bucket1 bucket2
 
 # 特定のAWSプロファイルを使用
-python tools/delete_buckets.py --delete --profile myprofile
+venv/bin/python tools/delete_buckets.py --delete --profile myprofile
 ```
 
 ---
