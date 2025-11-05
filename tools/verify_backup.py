@@ -648,21 +648,6 @@ def main():
             for name, size in sampled:
                 print(f"  - {name}: {humanize.naturalsize(size, binary=True)}")
 
-        # 確認
-        print(f"\n{'='*80}")
-        print(f"⚠️  以下の設定で検証を開始します:")
-        print(f"{'='*80}")
-        print(f"  バケット数: {len(target_buckets)}")
-        print(f"  各バケットのサンプリング数: {args.file_count}ファイル")
-        print(f"  Dropboxパス: {dropbox_base_path}")
-        print(f"  一時ディレクトリ: {temp_dir}")
-        print(f"{'='*80}\n")
-
-        response = input("検証を開始しますか？ (yes/no): ").strip().lower()
-        if response != 'yes':
-            print("\n⚠️  検証がキャンセルされました。")
-            return
-
         # 検証実行
         results = []
         for i, bucket_name in enumerate(target_buckets, 1):

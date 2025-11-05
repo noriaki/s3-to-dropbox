@@ -344,35 +344,25 @@ Dropbox認証情報が正しく設定されていません。
             os.makedirs(os.path.dirname(local_path), exist_ok=True)
 
             # ダウンロード実行
+            metadata, response = self.dbx.files_download(dropbox_path)
+
             with open(local_path, 'wb') as f:
-                if file_size <= self.CHUNK_SIZE:
-                    # 小さいファイルは一括ダウンロード
-                    metadata, response = self.dbx.files_download(dropbox_path)
-                    data = response.content
-                    f.write(data)
+                # ストリーミングでダウンロード（メモリ効率的）
+                downloaded = 0
+                chunk_size = 10 * 1024 * 1024  # 10MB chunks for progress updates
+
+                # response.content を取得してチャンクで書き込み
+                content = response.content
+                total_size = len(content)
+
+                # チャンク単位で書き込み
+                for i in range(0, total_size, chunk_size):
+                    chunk = content[i:i + chunk_size]
+                    f.write(chunk)
+                    downloaded += len(chunk)
+
                     if progress_callback:
-                        progress_callback(len(data), file_size)
-                else:
-                    # 大きいファイルはチャンクダウンロード
-                    downloaded = 0
-                    while downloaded < file_size:
-                        # 範囲指定でチャンクダウンロード
-                        chunk_size = min(self.CHUNK_SIZE, file_size - downloaded)
-                        end_byte = downloaded + chunk_size - 1
-
-                        # Dropbox APIで範囲指定ダウンロード
-                        headers = {"Range": f"bytes={downloaded}-{end_byte}"}
-                        metadata, response = self.dbx.files_download(
-                            dropbox_path,
-                            headers=headers
-                        )
-
-                        chunk = response.content
-                        f.write(chunk)
-                        downloaded += len(chunk)
-
-                        if progress_callback:
-                            progress_callback(downloaded, file_size)
+                        progress_callback(downloaded, file_size)
 
             self.logger.info(f"ダウンロード完了: {dropbox_path} -> {local_path}")
             return True
