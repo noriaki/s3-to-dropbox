@@ -298,3 +298,129 @@ class Compressor:
         except Exception as e:
             self.logger.error(f"ディスク容量の確認に失敗: {str(e)}")
             return False, 0
+
+    def merge_split_files(self, split_files: List[str], output_path: str,
+                         progress_callback: Optional[callable] = None) -> bool:
+        """
+        分割ファイルを結合
+
+        Args:
+            split_files: 分割ファイルパスのリスト（順番にソート済み）
+            output_path: 出力ファイルパス
+            progress_callback: 進捗コールバック関数(current, total)
+
+        Returns:
+            bool: 成功した場合True
+        """
+        try:
+            # 分割ファイルの総サイズを計算
+            total_size = sum(os.path.getsize(f) for f in split_files)
+            processed_size = 0
+
+            # 出力ディレクトリの作成
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+            self.logger.info(f"分割ファイル結合開始: {len(split_files)}個 -> {output_path}")
+
+            # 分割ファイルを順番に読み込んで結合
+            with open(output_path, 'wb') as output_file:
+                for i, split_file in enumerate(split_files, 1):
+                    if not os.path.exists(split_file):
+                        raise FileNotFoundError(f"分割ファイルが見つかりません: {split_file}")
+
+                    file_size = os.path.getsize(split_file)
+                    self.logger.debug(f"結合中 [{i}/{len(split_files)}]: {split_file}")
+
+                    with open(split_file, 'rb') as input_file:
+                        # チャンクで読み込んで書き込み（メモリ節約）
+                        chunk_size = 10 * 1024 * 1024  # 10MB
+                        while True:
+                            chunk = input_file.read(chunk_size)
+                            if not chunk:
+                                break
+                            output_file.write(chunk)
+
+                    processed_size += file_size
+                    if progress_callback:
+                        progress_callback(i, len(split_files))
+
+            output_size = os.path.getsize(output_path)
+            self.logger.info(f"ファイル結合完了: {output_path} ({output_size:,} bytes)")
+
+            # サイズ検証
+            if output_size != total_size:
+                self.logger.warning(
+                    f"結合後のサイズが予想と異なります: 期待={total_size:,}, 実際={output_size:,}"
+                )
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"ファイル結合に失敗: {str(e)}")
+            # 失敗した場合は不完全なファイルを削除
+            if os.path.exists(output_path):
+                try:
+                    os.remove(output_path)
+                except Exception:
+                    pass
+            return False
+
+    def extract_archive(self, archive_path: str, output_dir: str,
+                       compression_format: str = 'zip',
+                       progress_callback: Optional[callable] = None) -> bool:
+        """
+        圧縮ファイルを展開
+
+        Args:
+            archive_path: 圧縮ファイルパス
+            output_dir: 展開先ディレクトリ
+            compression_format: 圧縮形式（'zip' または 'tar.gz'）
+            progress_callback: 進捗コールバック関数(current, total)
+
+        Returns:
+            bool: 成功した場合True
+        """
+        try:
+            # 出力ディレクトリの作成
+            os.makedirs(output_dir, exist_ok=True)
+
+            self.logger.info(f"アーカイブ展開開始: {archive_path} -> {output_dir}")
+
+            if compression_format == 'zip':
+                with zipfile.ZipFile(archive_path, 'r') as zipf:
+                    members = zipf.namelist()
+                    total = len(members)
+
+                    for i, member in enumerate(members, 1):
+                        zipf.extract(member, output_dir)
+                        if progress_callback:
+                            progress_callback(i, total)
+
+            elif compression_format == 'tar.gz':
+                with tarfile.open(archive_path, 'r:gz') as tar:
+                    members = tar.getmembers()
+                    total = len(members)
+
+                    for i, member in enumerate(members, 1):
+                        tar.extract(member, output_dir)
+                        if progress_callback:
+                            progress_callback(i, total)
+
+            else:
+                raise ValueError(f"サポートされていない圧縮形式: {compression_format}")
+
+            # 展開されたファイル数を確認
+            extracted_count = sum(len(files) for _, _, files in os.walk(output_dir))
+            self.logger.info(f"アーカイブ展開完了: {extracted_count}個のファイルを展開")
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"アーカイブ展開に失敗: {str(e)}")
+            # 失敗した場合は展開途中のファイルを削除
+            if os.path.exists(output_dir):
+                try:
+                    shutil.rmtree(output_dir)
+                except Exception:
+                    pass
+            return False
