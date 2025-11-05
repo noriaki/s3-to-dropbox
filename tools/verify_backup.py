@@ -580,7 +580,19 @@ def main():
         # 圧縮機能の初期化
         compressor = Compressor(logger=logger)
 
+        # バケットリスト整合性チェック
+        bucket_list_result = verify_bucket_lists(
+            aws_client,
+            dropbox_client,
+            dropbox_base_path,
+            logger
+        )
+
         # バケット選択
+        print(f"\n{'='*80}")
+        print(f"📊 Step 2: サンプリング検証")
+        print(f"{'='*80}")
+
         if args.buckets:
             target_buckets = args.buckets
             print(f"\n📦 指定されたバケット: {len(target_buckets)}個")
@@ -650,7 +662,7 @@ def main():
         print("📊 レポート生成中...")
         print(f"{'='*80}")
 
-        json_path, md_path = generate_reports(results, args.output_dir, logger)
+        json_path, md_path = generate_reports(results, bucket_list_result, args.output_dir, logger)
 
         print(f"\n✅ 検証完了！")
         print(f"\n📄 レポート:")
