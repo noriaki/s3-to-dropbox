@@ -440,12 +440,13 @@ def verify_bucket(bucket_name: str, dropbox_base_path: str,
     return result
 
 
-def generate_reports(results: List[Dict], output_dir: str, logger):
+def generate_reports(results: List[Dict], bucket_list_result: Dict, output_dir: str, logger):
     """
     検証レポートを生成
 
     Args:
         results: 検証結果のリスト
+        bucket_list_result: バケットリスト検証結果
         output_dir: 出力ディレクトリ
         logger: ロガー
     """
@@ -455,6 +456,7 @@ def generate_reports(results: List[Dict], output_dir: str, logger):
     json_path = os.path.join(output_dir, f"verification_report_{timestamp}.json")
     report_data = {
         'timestamp': datetime.now().isoformat(),
+        'bucket_list_verification': bucket_list_result,
         'summary': {
             'total_buckets': len(results),
             'success_buckets': sum(1 for r in results if r['success']),
@@ -477,6 +479,30 @@ def generate_reports(results: List[Dict], output_dir: str, logger):
     with open(md_path, 'w', encoding='utf-8') as f:
         f.write("# Dropbox バックアップ検証レポート\n\n")
         f.write(f"**生成日時**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+
+        # バケットリスト整合性チェック結果
+        f.write("## バケットリスト整合性チェック\n\n")
+        f.write(f"- **S3バケット数**: {bucket_list_result['s3_bucket_count']}\n")
+        f.write(f"- **Dropboxバケット数**: {bucket_list_result['dropbox_bucket_count']}\n")
+
+        if bucket_list_result['match']:
+            f.write(f"- **結果**: ✅ 一致\n\n")
+        else:
+            f.write(f"- **結果**: ❌ 不一致\n\n")
+
+            if bucket_list_result['missing_in_dropbox']:
+                f.write(f"### ⚠️ 移行漏れ (S3にあるがDropboxにない): {len(bucket_list_result['missing_in_dropbox'])}個\n\n")
+                for bucket in bucket_list_result['missing_in_dropbox']:
+                    f.write(f"- `{bucket}`\n")
+                f.write("\n")
+
+            if bucket_list_result['extra_in_dropbox']:
+                f.write(f"### ⚠️ 余分なバケット (DropboxにあるがS3にない): {len(bucket_list_result['extra_in_dropbox'])}個\n\n")
+                for bucket in bucket_list_result['extra_in_dropbox']:
+                    f.write(f"- `{bucket}`\n")
+                f.write("\n")
+
+        f.write("---\n\n")
 
         f.write("## サマリー\n\n")
         f.write(f"- **検証バケット数**: {report_data['summary']['total_buckets']}\n")
