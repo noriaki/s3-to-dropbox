@@ -86,6 +86,93 @@ def get_compression_format_from_filename(filename: str) -> str:
         return 'zip'  # デフォルト
 
 
+def verify_bucket_lists(aws_client: AWSClient, dropbox_client: DropboxClient,
+                       dropbox_base_path: str, logger) -> Dict:
+    """
+    S3とDropboxのバケットリストを比較検証
+
+    Args:
+        aws_client: AWSクライアント
+        dropbox_client: Dropboxクライアント
+        dropbox_base_path: Dropboxベースパス
+        logger: ロガー
+
+    Returns:
+        検証結果の辞書
+    """
+    result = {
+        's3_bucket_count': 0,
+        'dropbox_bucket_count': 0,
+        's3_buckets': [],
+        'dropbox_buckets': [],
+        'missing_in_dropbox': [],  # S3にあるがDropboxにない
+        'extra_in_dropbox': [],    # DropboxにあるがS3にない
+        'match': False
+    }
+
+    try:
+        print(f"\n{'='*80}")
+        print(f"📊 Step 1: バケットリスト整合性チェック")
+        print(f"{'='*80}")
+
+        # S3バケットリスト取得
+        print(f"\n📦 S3バケットリストを取得中...")
+        s3_buckets = aws_client.list_buckets()
+        s3_bucket_names = set([b['Name'] for b in s3_buckets])
+        result['s3_bucket_count'] = len(s3_bucket_names)
+        result['s3_buckets'] = sorted(list(s3_bucket_names))
+        print(f"  ✓ S3バケット数: {len(s3_bucket_names)}")
+
+        # Dropboxバケットリスト取得
+        print(f"\n📦 Dropboxバケットリストを取得中...")
+        dropbox_entries = dropbox_client.list_folder(dropbox_base_path)
+        dropbox_bucket_names = set([e.name for e in dropbox_entries if hasattr(e, 'name')])
+        result['dropbox_bucket_count'] = len(dropbox_bucket_names)
+        result['dropbox_buckets'] = sorted(list(dropbox_bucket_names))
+        print(f"  ✓ Dropboxバケット数: {len(dropbox_bucket_names)}")
+
+        # 差分検出
+        print(f"\n🔍 バケット名を照合中...")
+        missing_in_dropbox = s3_bucket_names - dropbox_bucket_names
+        extra_in_dropbox = dropbox_bucket_names - s3_bucket_names
+
+        result['missing_in_dropbox'] = sorted(list(missing_in_dropbox))
+        result['extra_in_dropbox'] = sorted(list(extra_in_dropbox))
+        result['match'] = (len(missing_in_dropbox) == 0 and len(extra_in_dropbox) == 0)
+
+        # 結果表示
+        print(f"\n{'='*80}")
+        if result['match']:
+            print(f"✅ バケット数: 一致 ({len(s3_bucket_names)}個)")
+            print(f"✅ バケット名: 全て一致")
+        else:
+            print(f"❌ バケット数: S3={len(s3_bucket_names)}, Dropbox={len(dropbox_bucket_names)}")
+
+            if missing_in_dropbox:
+                print(f"\n⚠️  移行漏れ (S3にあるがDropboxにない): {len(missing_in_dropbox)}個")
+                for bucket in sorted(missing_in_dropbox)[:10]:  # 最初の10個のみ表示
+                    print(f"  - {bucket}")
+                if len(missing_in_dropbox) > 10:
+                    print(f"  ... 他 {len(missing_in_dropbox) - 10}個")
+
+            if extra_in_dropbox:
+                print(f"\n⚠️  余分なバケット (DropboxにあるがS3にない): {len(extra_in_dropbox)}個")
+                for bucket in sorted(extra_in_dropbox)[:10]:  # 最初の10個のみ表示
+                    print(f"  - {bucket}")
+                if len(extra_in_dropbox) > 10:
+                    print(f"  ... 他 {len(extra_in_dropbox) - 10}個")
+
+        print(f"{'='*80}")
+
+        logger.info(f"バケットリスト整合性チェック完了: 一致={result['match']}")
+
+    except Exception as e:
+        log_exception(logger, "バケットリスト整合性チェックに失敗", e)
+        print(f"\n❌ エラー: {str(e)}")
+
+    return result
+
+
 def verify_bucket(bucket_name: str, dropbox_base_path: str,
                  aws_client: AWSClient, dropbox_client: DropboxClient,
                  compressor: Compressor, temp_dir: str,
