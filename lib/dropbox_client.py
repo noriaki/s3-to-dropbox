@@ -321,3 +321,103 @@ Dropbox認証情報が正しく設定されていません。
             self.logger.error(f"フォルダ一覧の取得に失敗: {folder_path}")
             self.logger.error(f"エラー詳細: {str(e)}")
             return []
+
+    def download_file(self, dropbox_path: str, local_path: str,
+                     progress_callback: Optional[callable] = None) -> bool:
+        """
+        Dropboxからファイルをダウンロード（大容量ファイル対応）
+
+        Args:
+            dropbox_path: Dropbox上のパス
+            local_path: ローカル保存先パス
+            progress_callback: 進捗コールバック関数(downloaded_bytes, total_bytes)
+
+        Returns:
+            bool: 成功した場合True
+        """
+        try:
+            # ファイルメタデータを取得してサイズを確認
+            metadata = self.dbx.files_get_metadata(dropbox_path)
+            file_size = metadata.size
+
+            # 保存先ディレクトリを作成
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+            # ダウンロード実行
+            with open(local_path, 'wb') as f:
+                if file_size <= self.CHUNK_SIZE:
+                    # 小さいファイルは一括ダウンロード
+                    metadata, response = self.dbx.files_download(dropbox_path)
+                    data = response.content
+                    f.write(data)
+                    if progress_callback:
+                        progress_callback(len(data), file_size)
+                else:
+                    # 大きいファイルはチャンクダウンロード
+                    downloaded = 0
+                    while downloaded < file_size:
+                        # 範囲指定でチャンクダウンロード
+                        chunk_size = min(self.CHUNK_SIZE, file_size - downloaded)
+                        end_byte = downloaded + chunk_size - 1
+
+                        # Dropbox APIで範囲指定ダウンロード
+                        headers = {"Range": f"bytes={downloaded}-{end_byte}"}
+                        metadata, response = self.dbx.files_download(
+                            dropbox_path,
+                            headers=headers
+                        )
+
+                        chunk = response.content
+                        f.write(chunk)
+                        downloaded += len(chunk)
+
+                        if progress_callback:
+                            progress_callback(downloaded, file_size)
+
+            self.logger.info(f"ダウンロード完了: {dropbox_path} -> {local_path}")
+            return True
+
+        except ApiError as e:
+            self.logger.error(f"ファイルダウンロードに失敗: {dropbox_path} -> {local_path}")
+            self.logger.error(f"エラー詳細: {str(e)}")
+            # 失敗した場合は部分ダウンロードファイルを削除
+            if os.path.exists(local_path):
+                try:
+                    os.remove(local_path)
+                except Exception:
+                    pass
+            return False
+        except Exception as e:
+            self.logger.error(f"予期しないエラー: {str(e)}")
+            # 失敗した場合は部分ダウンロードファイルを削除
+            if os.path.exists(local_path):
+                try:
+                    os.remove(local_path)
+                except Exception:
+                    pass
+            return False
+
+    def get_file_metadata(self, dropbox_path: str) -> Optional[dict]:
+        """
+        ファイルのメタデータを取得
+
+        Args:
+            dropbox_path: Dropbox上のパス
+
+        Returns:
+            dict: メタデータ（name, size, path_display等）、失敗時はNone
+        """
+        try:
+            metadata = self.dbx.files_get_metadata(dropbox_path)
+            return {
+                'name': metadata.name,
+                'path_display': metadata.path_display,
+                'size': metadata.size if hasattr(metadata, 'size') else 0,
+                'is_folder': isinstance(metadata, dropbox.files.FolderMetadata),
+                'client_modified': metadata.client_modified if hasattr(metadata, 'client_modified') else None,
+                'server_modified': metadata.server_modified if hasattr(metadata, 'server_modified') else None,
+            }
+        except ApiError as e:
+            self.logger.error(f"メタデータの取得に失敗: {dropbox_path}")
+            self.logger.error(f"エラー詳細: {str(e)}")
+            return None
