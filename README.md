@@ -15,7 +15,8 @@ AWS S3バケットをDropboxにバックアップし、安全に削除するた�
 - [使用方法](#使用方法)
   - [ツール1: バケット情報確認](#ツール1-バケット情報確認)
   - [ツール2: データ移行](#ツール2-データ移行)
-  - [ツール3: バケット削除](#ツール3-バケット削除)
+  - [ツール3: バックアップ検証](#ツール3-バックアップ検証)
+  - [ツール4: バケット削除](#ツール4-バケット削除)
 - [ワークフロー](#ワークフロー)
 - [データ保存形式](#データ保存形式)
 - [トラブルシューティング](#トラブルシューティング)
@@ -58,7 +59,15 @@ AWS S3バケットをDropboxにバックアップし、安全に削除するた�
 - Dropboxへのアップロード
 - 進行状況の永続化（中断・再開可能）
 
-### ツール3: バケット削除 (`delete_buckets.py`)
+### ツール3: バックアップ検証 (`verify_backup.py`)
+
+- Dropboxバックアップファイルの整合性検証
+- 圧縮ファイルのダウンロードと解凍テスト
+- S3メタデータとの突合検証
+- 分散サンプリング（小・中・大サイズのバケット/ファイル）
+- JSON/Markdownレポート生成
+
+### ツール4: バケット削除 (`delete_buckets.py`)
 
 - 移行完了したバケットのみ削除
 - ドライランモード（削除予定の確認）
@@ -530,7 +539,64 @@ venv/bin/python tools/migrate_data.py
 
 ---
 
-### ツール3: バケット削除
+### ツール3: バックアップ検証
+
+Dropboxにアップロードされたバックアップファイルの整合性を検証します。
+
+#### 基本的な使用方法
+
+```bash
+venv/bin/python tools/verify_backup.py
+# または（activate済みの場合）
+python tools/verify_backup.py
+```
+
+#### オプション
+
+```bash
+# サンプリング数を指定（デフォルト: 5バケット、各50ファイル）
+venv/bin/python tools/verify_backup.py --bucket-count 3 --file-count 20
+
+# 特定のバケットのみ検証
+venv/bin/python tools/verify_backup.py --buckets bucket1 bucket2
+
+# 特定のAWSプロファイルを使用
+venv/bin/python tools/verify_backup.py --profile myprofile
+
+# レポート出力先を指定
+venv/bin/python tools/verify_backup.py --output-dir reports
+```
+
+#### 検証フロー
+
+各バケットについて以下の検証を実行します:
+
+1. ✅ **Dropboxからファイル一覧取得** - 圧縮ファイルの存在確認
+2. ✅ **圧縮ファイルダウンロード** - 分割ファイルにも対応
+3. ✅ **分割ファイル結合** - 必要に応じて結合
+4. ✅ **整合性チェック** - CRC検証
+5. ✅ **アーカイブ解凍** - 実際に解凍できるか確認
+6. ✅ **ファイルサンプリング** - 小・中・大サイズから分散選択
+7. ✅ **S3メタデータ突合** - ファイル名・サイズをS3と比較
+8. ✅ **レポート生成** - JSON/Markdown形式で出力
+
+#### サンプリング方法
+
+- **バケット選択**: 全バケットを小・中・大サイズに分類し、各グループから均等に選択
+- **ファイル選択**: 各バケット内のファイルも小・中・大サイズに分類し、均等に選択
+- これにより、偏りのない代表的なサンプルを検証できます
+
+#### 出力レポート
+
+```
+data/
+├── verification_report_20251105_123456.json    # 詳細データ
+└── verification_report_20251105_123456.md      # 人間向けレポート
+```
+
+---
+
+### ツール4: バケット削除
 
 移行完了したバケットを削除します。
 
@@ -593,13 +659,14 @@ venv/bin/python tools/delete_buckets.py --delete --profile myprofile
     ・途中で中断しても再開可能
     ・進行状況は自動保存
 
-3️⃣  バックアップ確認
+3️⃣  バックアップ検証
     ↓
-    Dropboxで以下を確認:
-    ・圧縮ファイルが存在するか
-    ・file_list.mdが存在するか
-    ・README.mdが存在するか
-    ・分割ファイルが全て揃っているか
+    venv/bin/python tools/verify_backup.py
+    ↓
+    ・Dropboxから圧縮ファイルをダウンロード
+    ・実際に解凍してS3メタデータと突合
+    ・JSON/Markdownレポート生成
+    ・問題があれば詳細レポートで確認
 
 4️⃣  削除予定確認（ドライラン）
     ↓
@@ -910,9 +977,10 @@ MIT License
 
 ```
 s3-to-dropbox/
-├── tools/              # 3つのメインツール
+├── tools/              # 4つのメインツール
 │   ├── bucket_info.py
 │   ├── migrate_data.py
+│   ├── verify_backup.py
 │   └── delete_buckets.py
 ├── lib/                # 共通ライブラリ
 │   ├── aws_client.py
@@ -922,7 +990,7 @@ s3-to-dropbox/
 │   ├── file_list.py
 │   └── logger.py
 ├── logs/               # ログファイル
-├── data/               # 進行状況ファイル
+├── data/               # 進行状況・レポートファイル
 ├── temp/               # 一時ファイル
 ├── requirements.txt
 ├── .env.example
